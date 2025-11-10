@@ -18,12 +18,38 @@ jobs:
   build-and-push:
     runs-on: ubuntu-latest
     steps:
+      # 1) get the repo
       - name: Checkout
         uses: actions/checkout@v4
 
+      # 2) install helm (runner may not have it)
+      - name: Install Helm
+        run: |
+          curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+      # 3) install OPA and run policy on rendered chart
+      - name: OPA policy check (Kubernetes)
+        run: |
+          # render just the API deployment
+          helm template charts/api --show-only templates/deployment.yaml > /tmp/api-deploy.yaml
+
+          # install opa
+          curl -L -o opa https://openpolicyagent.org/downloads/latest/opa_linux_amd64
+          chmod +x opa
+          sudo mv opa /usr/local/bin/opa
+
+          # run your policy
+          RESULT=$(opa eval -i /tmp/api-deploy.yaml -d opa/k8s 'data.k8s.pod_security.deny' --format=json)
+          echo "$RESULT"
+
+          # if any deny message appears (your policy messages say "must ..."), fail
+          echo "$RESULT" | grep "must" && { echo "Policy check failed"; exit 1; } || echo "Policy check passed"
+
+      # 4) docker buildx set up (your original step)
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v3
 
+      # 5) login to ghcr
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
@@ -36,8 +62,8 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: ./apps/api
-          push: false        
-          load: true       
+          push: false
+          load: true
           tags: |
             api:local
             ${{ env.IMAGE_API }}:${{ github.sha }}
@@ -45,10 +71,10 @@ jobs:
       - name: Trivy scan API (local image)
         uses: aquasecurity/trivy-action@0.20.0
         with:
-            image-ref: api:local   
-            format: 'table'
-            severity: 'HIGH,CRITICAL'
-            exit-code: '1'
+          image-ref: api:local
+          format: 'table'
+          severity: 'HIGH,CRITICAL'
+          exit-code: '1'
 
       - name: Push API image to GHCR
         uses: docker/build-push-action@v6
@@ -66,7 +92,7 @@ jobs:
         with:
           context: ./apps/worker
           push: false
-          load: true           
+          load: true
           tags: |
             worker:local
             ${{ env.IMAGE_WORKER }}:${{ github.sha }}
@@ -74,10 +100,10 @@ jobs:
       - name: Trivy scan Worker (local image)
         uses: aquasecurity/trivy-action@0.20.0
         with:
-            image-ref: worker:local
-            format: 'table'
-            severity: 'HIGH,CRITICAL'
-            exit-code: '1'
+          image-ref: worker:local
+          format: 'table'
+          severity: 'HIGH,CRITICAL'
+          exit-code: '1'
 
       - name: Push Worker image to GHCR
         uses: docker/build-push-action@v6
