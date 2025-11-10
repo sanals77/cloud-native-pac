@@ -1,11 +1,11 @@
-import time, os
+import time, os, sys
 
-def process_once():
-    print("[worker] processing tick...")
+print("[worker] starting up...", flush=True)
 
-if __name__ == "__main__":
-    interval = int(os.getenv("WORKER_INTERVAL", 5))
-    while True:
-        process_once()
-        time.sleep(interval)
+interval = int(os.getenv("WORKER_INTERVAL", 5))
+
+while True:
+    print("[worker] processing tick...", flush=True)
+    sys.stdout.flush()
+    time.sleep(interval)
 

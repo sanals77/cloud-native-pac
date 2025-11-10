@@ -1,13 +1,9 @@
 image:
-  repository: api
+  repository: worker
   tag: dev
   pullPolicy: IfNotPresent
 
 replicaCount: 1
-
-service:
-  type: ClusterIP
-  port: 80
 
 resources:
   requests:
@@ -16,7 +12,6 @@ resources:
   limits:
     cpu: 200m
     memory: 256Mi
-
 
 podSecurityContext:
   runAsNonRoot: true
