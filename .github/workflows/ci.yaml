@@ -18,38 +18,39 @@ jobs:
   build-and-push:
     runs-on: ubuntu-latest
     steps:
-      # 1) get the repo
+      # 1) get code
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 2) install helm (runner may not have it)
-      - name: Install Helm
-        run: |
-          curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+      # 2) install Helm (proper way on GitHub)
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.15.2
 
-      # 3) install OPA and run policy on rendered chart
+      # 3) OPA policy check on rendered Kubernetes manifest
       - name: OPA policy check (Kubernetes)
         run: |
-          # render just the API deployment
+          # render just the API deployment from your chart
           helm template charts/api --show-only templates/deployment.yaml > /tmp/api-deploy.yaml
 
-          # install opa
+          # install OPA
           curl -L -o opa https://openpolicyagent.org/downloads/latest/opa_linux_amd64
           chmod +x opa
           sudo mv opa /usr/local/bin/opa
 
-          # run your policy
+          # run the policy you created in opa/k8s/pod_security.rego
           RESULT=$(opa eval -i /tmp/api-deploy.yaml -d opa/k8s 'data.k8s.pod_security.deny' --format=json)
           echo "$RESULT"
 
-          # if any deny message appears (your policy messages say "must ..."), fail
+          # fail if the policy returned any "must ..." messages
           echo "$RESULT" | grep "must" && { echo "Policy check failed"; exit 1; } || echo "Policy check passed"
 
-      # 4) docker buildx set up (your original step)
+      # 4) docker buildx
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v3
 
-      # 5) login to ghcr
+      # 5) login to GHCR
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
